@@ -15,6 +15,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -31,10 +32,35 @@ import javax.tools.ToolProvider;
 import org.apache.commons.io.IOUtils;
 import org.junit.rules.ExternalResource;
 import org.junit.rules.TemporaryFolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class CompilerFixture
     extends ExternalResource
 {
+
+    public class JoinLogString
+    {
+
+        private final Collection<?> objects;
+
+        private final String joint;
+
+        public JoinLogString( final Collection<?> objects, final String joint )
+        {
+            this.objects = objects;
+            this.joint = joint;
+        }
+
+        @Override
+        public String toString()
+        {
+            return join( objects, joint );
+        }
+
+    }
+
+    private final Logger logger = LoggerFactory.getLogger( getClass() );
 
     private final TemporaryFolder temp;
 
@@ -99,11 +125,16 @@ public class CompilerFixture
 
         final File target = temp.newFolder( directory.getName() + "-classes" );
 
-        List<File> sources = scan( directory, "**/*.java" );
+        final List<File> sources = scan( directory, "**/*.java" );
 
         final JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
         final StandardJavaFileManager fileManager = javac.getStandardFileManager( null, null, null );
-        Iterable<? extends JavaFileObject> fileObjs = fileManager.getJavaFileObjectsFromFiles( sources );
+        final Set<JavaFileObject> objects = new HashSet<>();
+
+        for ( final JavaFileObject jfo : fileManager.getJavaFileObjectsFromFiles( sources ) )
+        {
+            objects.add( jfo );
+        }
 
         final DiagnosticCollector<JavaFileObject> diags = new DiagnosticCollector<>();
 
@@ -111,7 +142,19 @@ public class CompilerFixture
 
         options.addAll( config.getExtraOptions() );
 
+        final StringBuilder sp = new StringBuilder();
+        sp.append( directory.getCanonicalPath() )
+          .append( ';' )
+          .append( target.getCanonicalPath() );
+
         File generatedSourceDir = null;
+
+        final List<String> procOptions = new ArrayList<>( options );
+        procOptions.add( "-proc:only" );
+
+        final Set<File> seenSources = new HashSet<>( sources );
+        Boolean result = Boolean.TRUE;
+
         final List<Class<? extends AbstractProcessor>> annoProcessors = config.getAnnotationProcessors();
         if ( !annoProcessors.isEmpty() )
         {
@@ -126,43 +169,71 @@ public class CompilerFixture
                 sb.append( annoProcessor.getCanonicalName() );
             }
 
-            options.add( "-processor" );
-            options.add( sb.toString() );
+            procOptions.add( "-processor" );
+            procOptions.add( sb.toString() );
 
             generatedSourceDir = temp.newFolder( directory.getName() + "-generated-sources" );
-            options.add( "-s" );
-            options.add( generatedSourceDir.getCanonicalPath() );
-        }
+            procOptions.add( "-s" );
+            procOptions.add( generatedSourceDir.getCanonicalPath() );
 
-        CompilationTask task = javac.getTask( null, fileManager, diags, options, null, fileObjs );
-        Boolean result = task.call();
+            sp.append( ';' )
+              .append( generatedSourceDir.getCanonicalPath() );
 
-        final Set<File> seenSources = new HashSet<>();
-        if ( result && generatedSourceDir != null && generatedSourceDir.isDirectory() )
-        {
-            sources = scan( generatedSourceDir, "**/*.java" );
-            sources.removeAll( seenSources );
-            seenSources.addAll( sources );
+            procOptions.add( "-sourcepath" );
+            procOptions.add( sp.toString() );
 
             int pass = 1;
-            while ( !sources.isEmpty() )
+            List<File> nextSources;
+            do
             {
-                System.out.printf( "pass: %d Compiling/processing generated sources:\n  %s\n", pass,
-                                   join( sources, "\n  " ) );
-                fileObjs = fileManager.getJavaFileObjectsFromFiles( sources );
-                task = javac.getTask( null, fileManager, diags, options, null, fileObjs );
+                logger.debug( "pass: {} Compiling/processing generated sources with: '{}':\n  {}\n", pass,
+                                   new JoinLogString( procOptions, ", " ),
+                                   new JoinLogString( sources, "\n  " ) );
+
+                for ( final JavaFileObject jfo : fileManager.getJavaFileObjectsFromFiles( seenSources ) )
+                {
+                    objects.add( jfo );
+                }
+
+                final CompilationTask task = javac.getTask( null, fileManager, diags, procOptions, null, objects );
                 result = task.call();
 
-                sources = scan( generatedSourceDir, "**/*.java" );
-                sources.removeAll( seenSources );
-                seenSources.addAll( sources );
+                nextSources = scan( generatedSourceDir, "**/*.java" );
+
+                logger.debug( "\n\nNewly scanned sources:\n  {}\n\nPreviously seen sources:\n  {}\n\n",
+                                   new JoinLogString( nextSources, "\n  " ), new JoinLogString( seenSources, "\n  " ) );
+                nextSources.removeAll( seenSources );
+                seenSources.addAll( nextSources );
                 pass++;
             }
+            while ( pass < config.getMaxAnnotationProcessorPasses() && !nextSources.isEmpty() );
+        }
+
+        if ( result )
+        {
+            options.add( "-sourcepath" );
+            options.add( sp.toString() );
+
+            options.add( "-proc:none" );
+
+            for ( final JavaFileObject jfo : fileManager.getJavaFileObjectsFromFiles( seenSources ) )
+            {
+                objects.add( jfo );
+            }
+
+            final CompilationTask task = javac.getTask( null, fileManager, diags, options, null, objects );
+            result = task.call();
+
+            logger.debug( "Compiled classes:\n  {}\n\n", new JoinLogString( scan( target, "**/*.class" ), "\n  " ) );
+        }
+        else
+        {
+            logger.warn( "Annotation processing must have failed. Skipping compilation step." );
         }
 
         for ( final Diagnostic<? extends JavaFileObject> diag : diags.getDiagnostics() )
         {
-            System.out.println( diag );
+            logger.error( String.valueOf( diag ) );
         }
 
         final CompilerResult cr = new CompilerResultBuilder().withClasses( target )

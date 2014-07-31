@@ -12,6 +12,8 @@ public class CompilerFixtureConfig
 
     private final List<Class<? extends AbstractProcessor>> annotationProcessors = new ArrayList<>();
 
+    private int maxAnnotationProcessorPasses = 1;
+
     private final List<String> extraOptions = new ArrayList<>();
 
     public CompilerFixtureConfig withAnnotationProcessor( final Class<? extends AbstractProcessor> annotationProcessor )
@@ -20,10 +22,21 @@ public class CompilerFixtureConfig
         return this;
     }
 
+    public CompilerFixtureConfig withMaxAnnotationProcessorPasses( final int max )
+    {
+        this.maxAnnotationProcessorPasses = max;
+        return this;
+    }
+
     public CompilerFixtureConfig withExtraOptions( final String... extraOptions )
     {
         this.extraOptions.addAll( Arrays.asList( extraOptions ) );
         return this;
+    }
+
+    public int getMaxAnnotationProcessorPasses()
+    {
+        return maxAnnotationProcessorPasses;
     }
 
     public List<Class<? extends AbstractProcessor>> getAnnotationProcessors()
