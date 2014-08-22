@@ -81,5 +81,9 @@
     </pluginManagement>
   </build>
   
-  <version>0.1-SNAPSHOT</version>
+  <version>0.1</version>
+
+  <scm>
+    <tag>compiler-test-fixture-0.1</tag>
+  </scm>
 </project>
