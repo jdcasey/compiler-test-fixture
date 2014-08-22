@@ -26,7 +26,6 @@
     <connection>scm:git:https://github.com/jdcasey/compiler-test-fixture.git</connection>
     <developerConnection>scm:git:https://github.com/jdcasey/compiler-test-fixture.git</developerConnection>
     <url>https://github.com/jdcasey/compiler-test-fixture</url>
-    <tag>compiler-test-fixture-0.1</tag>
   </scm>
 
   <dependencyManagement>
@@ -88,5 +87,5 @@
     </pluginManagement>
   </build>
   
-  <version>0.1</version>
+  <version>0.1-SNAPSHOT</version>
 </project>
