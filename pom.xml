@@ -24,7 +24,7 @@
   
   <scm>
     <connection>scm:git:https://github.com/jdcasey/compiler-test-fixture.git</connection>
-    <developerConnection>scm:git:https://github.com/jdcasey/compiler-test-fixture.git</developerConnection>
+    <developerConnection>scm:git:git@github.com:jdcasey/compiler-test-fixture.git</developerConnection>
     <url>https://github.com/jdcasey/compiler-test-fixture</url>
   </scm>
 
