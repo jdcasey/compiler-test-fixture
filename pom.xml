@@ -22,6 +22,12 @@
 
   <name>javax.tools Compiler Test Fixture</name>
   
+  <scm>
+    <connection>https://github.com/jdcasey/compiler-test-fixture.git</connection>
+    <developerConnection>https://github.com/jdcasey/compiler-test-fixture.git</developerConnection>
+    <url>https://github.com/jdcasey/compiler-test-fixture</url>
+  </scm>
+
   <dependencyManagement>
     <dependencies>
       <dependency>
